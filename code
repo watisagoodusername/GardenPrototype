@@ -1,0 +1,159 @@
+#include <NewPing.h>
+#include <SD.h>
+
+#define trigpin 5
+#define echopin 6
+
+const int CSPin = 10;
+const int lightpin = A1;
+const int temppin = A2;
+const int soilpin = A0;
+const int pump = 3;
+const int soilpower = 7;
+const int bugfix = 8;
+
+float soildata;
+float lightdata;
+float sonicval;
+float tempdata;
+
+unsigned long currentseconds = 0;
+unsigned long previousRead = 0;
+
+unsigned int lineswritten = 0;
+
+NewPing distance(trigpin, echopin, 50);
+
+File plantdata;
+
+void setup() {
+  digitalWrite(bugfix, LOW);
+  
+  pinMode(lightpin, INPUT);
+  pinMode(temppin, INPUT);
+  pinMode(soilpin, INPUT);
+  pinMode(CSPin, OUTPUT);
+  pinMode(pump, OUTPUT);
+  pinMode(soilpower, OUTPUT);
+                                       
+  Serial.begin(9600);
+
+  if (!SD.begin(CSPin)) {
+    Serial.println("Something is broken.");
+    digitalWrite(bugfix, HIGH);
+    return;
+  }
+  Serial.println("Done.");
+}
+
+
+
+void loop() {
+  currentseconds = millis()/1000;
+  String input = Serial.readString();
+
+  if (currentseconds - previousRead >= 10) {
+
+    plantdata = SD.open("data.txt", FILE_WRITE);
+
+    lightdata = LightConversion(analogRead(lightpin));
+    tempdata = analogRead(temppin);
+    digitalWrite(soilpower, HIGH);
+    soildata = ReadSoil(analogRead(soilpin));
+    digitalWrite(soilpower, LOW);
+    sonicval = distance.ping_cm();
+    
+    if (plantdata) {
+      lineswritten ++;
+      
+      plantdata.print(lineswritten); plantdata.print(": ");
+      plantdata.print(lightdata); plantdata.print(", ");
+      plantdata.print(tempdata); plantdata.print(", ");      
+      plantdata.print(soildata); plantdata.print(", ");
+      plantdata.println(sonicval);
+
+      Serial.print(lineswritten);
+      Serial.print(", ");
+
+      plantdata.close();
+      digitalWrite(bugfix, LOW);
+
+    } else{Serial.print("problem");
+      digitalWrite(bugfix, HIGH);
+      }
+  
+    previousRead = currentseconds;
+
+  //watering when soil moisture below 10
+    if (soildata < 15 && lightdata > 250) {
+      waterit();
+    }
+  }
+  if (input.length() > 1) {
+    if (input.startsWith("/read")) {
+      readfromcard();
+    } else if (input.startsWith("/clear")) {
+      clearcard();
+    }
+  }
+}
+
+
+void writetocard(String input) {
+  plantdata = SD.open("data.txt", FILE_WRITE);
+
+  if(plantdata) {
+    Serial.print(input);  
+    plantdata.println(input);
+
+    plantdata.close();
+    digitalWrite(bugfix, LOW);
+  }else {
+    Serial.println("didnt work");
+    digitalWrite(bugfix, HIGH);
+  }
+}
+
+
+void readfromcard() {
+  plantdata = SD.open("data.txt");
+
+  if (plantdata) {
+    Serial.println("Read from data.txt:");
+
+    while (plantdata.available()) {
+      Serial.write(plantdata.read());
+    }
+    plantdata.close();
+    digitalWrite(bugfix, LOW);
+  } else {
+    Serial.println("Error. Cannot open");
+    digitalWrite(bugfix, HIGH);
+  }}
+
+
+void clearcard() {
+  Serial.print("Clearing... ");
+  SD.remove("data.txt");
+  Serial.println("Done");
+}
+
+
+float LightConversion(float val) {
+  float voltage =  (float)val * 5 / 1023;
+  return voltage * 1000;
+}
+
+
+float ReadSoil(float val) {
+  float moisture = val/10.24;
+  return moisture;
+}
+
+void waterit() {
+  Serial.print("watering... ");
+  digitalWrite(pump, HIGH);
+  delay(2000);
+  digitalWrite(pump, LOW);
+  Serial.println("done");
+}
