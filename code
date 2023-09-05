@@ -52,7 +52,7 @@ void loop() {
   currentseconds = millis()/1000;
   String input = Serial.readString();
 
-  if (currentseconds - previousRead >= 10) {
+  if (currentseconds - previousRead >= 59) {
 
     plantdata = SD.open("data.txt", FILE_WRITE);
 
